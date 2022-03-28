@@ -128,6 +128,7 @@ func (mpc *MembershipProofCommitting) New(
 	acc *Accumulator,
 	pp *ProofParams,
 	pk *PublicKey,
+	eb *ExternalBlinding,
 ) (*MembershipProofCommitting, error) {
 	// Randomly select σ, ρ
 	sigma := witness.y.Random(crand.Reader)
@@ -156,8 +157,16 @@ func (mpc *MembershipProofCommitting) New(
 	deltaRho := witness.y
 	deltaRho = deltaRho.Mul(rho)
 
-	// Randomly pick r_σ,r_ρ,r_δσ,r_δρ
 	rY := witness.y.Random(crand.Reader)
+	if eb != nil {
+		if eb.value != nil {
+			rY = eb.value
+		} else {
+			return nil, errors.New("incorrect external blinding")
+		}
+	}
+
+	// Randomly pick r_σ,r_ρ,r_δσ,r_δρ
 	rSigma := witness.y.Random(crand.Reader)
 	rRho := witness.y.Random(crand.Reader)
 	rDeltaSigma := witness.y.Random(crand.Reader)
@@ -414,6 +423,11 @@ func (mp *MembershipProof) Finalize(acc *Accumulator, pp *ProofParams, pk *Publi
 	}, nil
 }
 
+// GetLinkedBlinding returns sY so it can be compared with external linked value in other ZKP
+func (mp MembershipProof) GetLinkedBlinding() curves.Scalar {
+	return mp.sY
+}
+
 // MarshalBinary converts MembershipProof to bytes
 func (mp MembershipProof) MarshalBinary() ([]byte, error) {
 	tv := &membershipProofMarshal{
@@ -515,4 +529,66 @@ func (m MembershipProofFinal) GetChallenge(curve *curves.PairingCurve) curves.Sc
 	res = append(res, m.capRDeltaRho.ToAffineCompressed()...)
 	challenge := curve.Scalar.Hash(res)
 	return challenge
+}
+
+// GetChallengeBytes computes challenge bytes for MembershipProofFinal
+func (m MembershipProofFinal) GetChallengeBytes(curve *curves.PairingCurve) []byte {
+	res := m.accumulator.ToAffineCompressed()
+	res = append(res, m.eC.ToAffineCompressed()...)
+	res = append(res, m.tSigma.ToAffineCompressed()...)
+	res = append(res, m.tRho.ToAffineCompressed()...)
+	res = append(res, m.capRE.Bytes()...)
+	res = append(res, m.capRSigma.ToAffineCompressed()...)
+	res = append(res, m.capRRho.ToAffineCompressed()...)
+	res = append(res, m.capRDeltaSigma.ToAffineCompressed()...)
+	res = append(res, m.capRDeltaRho.ToAffineCompressed()...)
+	return res
+}
+
+// ExternalBlinding contains four distinct public generators of G1 - X, Y, Z
+type ExternalBlinding struct {
+	value curves.Scalar
+}
+
+// New creates a new secret key from the seed.
+func (eb *ExternalBlinding) New(curve *curves.PairingCurve) (*ExternalBlinding, error) {
+	eb.value = curve.Scalar.Random(crand.Reader)
+	return eb, nil
+}
+
+func (eb *ExternalBlinding) GetBlinding() curves.Scalar {
+	return eb.value
+}
+
+// MarshalBinary converts ExternalBlinding to bytes
+func (eb ExternalBlinding) MarshalBinary() ([]byte, error) {
+	if eb.value == nil {
+		return nil, fmt.Errorf("external blinding cannot be empty")
+	}
+	tv := &structMarshal{
+		Value: eb.value.Bytes(),
+		Curve: eb.value.Point().CurveName(),
+	}
+	return bare.Marshal(tv)
+}
+
+// UnmarshalBinary sets ExternalBlinding from bytes
+func (eb *ExternalBlinding) UnmarshalBinary(data []byte) error {
+	tv := new(structMarshal)
+	err := bare.Unmarshal(data, tv)
+	if err != nil {
+		return err
+	}
+	curve := curves.GetCurveByName(tv.Curve)
+	if curve == nil {
+		return fmt.Errorf("invalid curve")
+	}
+
+	value, err := curve.NewScalar().SetBytes(tv.Value)
+
+	if err != nil {
+		return err
+	}
+	eb.value = value
+	return nil
 }

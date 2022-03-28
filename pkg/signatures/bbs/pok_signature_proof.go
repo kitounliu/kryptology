@@ -211,3 +211,10 @@ func (pok PokSignatureProof) Verify(
 	}
 	return pok.VerifySigPok(pk) && challenge.Cmp(vChallenge) == 0
 }
+
+func (pok PokSignatureProof) GetLinkedBlindingForMessage(i int) (curves.Scalar, error) {
+	if i < 0 || i+2 >= len(pok.proof2) {
+		return nil, errors.New("incorrect message index")
+	}
+	return pok.proof2[i+2], nil
+}

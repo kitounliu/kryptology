@@ -41,6 +41,21 @@ func TestProofParamsMarshal(t *testing.T) {
 	require.True(t, params.z.Equal(params2.z))
 }
 
+func TestExternalBlindingMarshal(t *testing.T) {
+	curve := curves.BLS12381(&curves.PointBls12381G1{})
+	data, err := ExternalBlinding{curve.Scalar.One()}.MarshalBinary()
+	require.NoError(t, err)
+	require.NotNil(t, data)
+	e := &ExternalBlinding{curve.Scalar.New(2)}
+	err = e.UnmarshalBinary(data)
+	require.NoError(t, err)
+	require.Equal(t, e.value.Bytes(), curve.Scalar.One().Bytes())
+
+	// element cannot be empty
+	_, err = ExternalBlinding{}.MarshalBinary()
+	require.Error(t, err)
+}
+
 func TestMembershipProof(t *testing.T) {
 	curve := curves.BLS12381(&curves.PointBls12381G1{})
 	sk, _ := new(SecretKey).New(curve, []byte("1234567890"))
@@ -72,7 +87,7 @@ func TestMembershipProof(t *testing.T) {
 	require.NotNil(t, params.y)
 	require.NotNil(t, params.z)
 
-	mpc, err := new(MembershipProofCommitting).New(wit, acc, params, pk)
+	mpc, err := new(MembershipProofCommitting).New(wit, acc, params, pk, nil)
 	require.NoError(t, err)
 	testMPC(t, mpc)
 
@@ -113,7 +128,105 @@ func TestMembershipProof(t *testing.T) {
 	require.NotNil(t, newParams.y)
 	require.NotNil(t, newParams.z)
 
-	newMPC, err := new(MembershipProofCommitting).New(wit, acc, newParams, pk)
+	newMPC, err := new(MembershipProofCommitting).New(wit, acc, newParams, pk, nil)
+	require.NoError(t, err)
+	testMPC(t, newMPC)
+
+	challenge3 := curve.Scalar.Hash(newMPC.GetChallengeBytes())
+	require.NotNil(t, challenge3)
+
+	newProof := newMPC.GenProof(challenge3)
+	require.NotNil(t, newProof)
+	testProof(t, newProof)
+
+	newFinalProof, err := newProof.Finalize(acc, newParams, pk, challenge3)
+	require.NoError(t, err)
+	require.NotNil(t, newFinalProof)
+	testFinalProof(t, newFinalProof)
+
+	challenge4 := newFinalProof.GetChallenge(curve)
+	require.Equal(t, challenge3, challenge4)
+}
+
+func TestMembershipProofWithExternalBlinding(t *testing.T) {
+	curve := curves.BLS12381(&curves.PointBls12381G1{})
+	sk, _ := new(SecretKey).New(curve, []byte("1234567890"))
+	pk, _ := sk.GetPublicKey(curve)
+
+	element1 := curve.Scalar.Hash([]byte("3"))
+	element2 := curve.Scalar.Hash([]byte("4"))
+	element3 := curve.Scalar.Hash([]byte("5"))
+	element4 := curve.Scalar.Hash([]byte("6"))
+	element5 := curve.Scalar.Hash([]byte("7"))
+	element6 := curve.Scalar.Hash([]byte("8"))
+	element7 := curve.Scalar.Hash([]byte("9"))
+	elements := []Element{element1, element2, element3, element4, element5, element6, element7}
+
+	// Initiate a new accumulator
+	acc, err := new(Accumulator).WithElements(curve, sk, elements)
+	require.NoError(t, err)
+	require.NotNil(t, acc.value)
+
+	// Initiate a new membership witness for value elements[3]
+	wit, err := new(MembershipWitness).New(elements[3], acc, sk)
+	require.NoError(t, err)
+	require.Equal(t, wit.y, elements[3])
+
+	// Create proof parameters, which contains randomly sampled G1 points X, Y, Z, K
+	params, err := new(ProofParams).New(curve, pk, []byte("entropy"))
+	require.NoError(t, err)
+	require.NotNil(t, params.x)
+	require.NotNil(t, params.y)
+	require.NotNil(t, params.z)
+
+	eb, err := new(ExternalBlinding).New(curve)
+	require.NoError(t, err)
+	require.NotNil(t, eb.value)
+	mpc, err := new(MembershipProofCommitting).New(wit, acc, params, pk, eb)
+	require.NoError(t, err)
+	testMPC(t, mpc)
+
+	challenge := curve.Scalar.Hash(mpc.GetChallengeBytes())
+	require.NotNil(t, challenge)
+
+	proof := mpc.GenProof(challenge)
+	require.NotNil(t, proof)
+	testProof(t, proof)
+
+	finalProof, err := proof.Finalize(acc, params, pk, challenge)
+	require.NoError(t, err)
+	require.NotNil(t, finalProof)
+	testFinalProof(t, finalProof)
+
+	challenge2 := finalProof.GetChallenge(curve)
+	require.Equal(t, challenge, challenge2)
+
+	// Check we can still have a valid proof even if accumulator and witness are updated
+	data1 := curve.Scalar.Hash([]byte("1"))
+	data2 := curve.Scalar.Hash([]byte("2"))
+	data3 := curve.Scalar.Hash([]byte("3"))
+	data4 := curve.Scalar.Hash([]byte("4"))
+	data5 := curve.Scalar.Hash([]byte("5"))
+	data := []Element{data1, data2, data3, data4, data5}
+	additions := data[0:2]
+	deletions := data[2:5]
+	_, coefficients, err := acc.Update(sk, additions, deletions)
+	require.NoError(t, err)
+	require.NotNil(t, coefficients)
+
+	_, err = wit.BatchUpdate(additions, deletions, coefficients)
+	require.NoError(t, err)
+
+	newParams, err := new(ProofParams).New(curve, pk, []byte("entropy"))
+	require.NoError(t, err)
+	require.NotNil(t, newParams.x)
+	require.NotNil(t, newParams.y)
+	require.NotNil(t, newParams.z)
+
+	newEb, err := new(ExternalBlinding).New(curve)
+	require.NoError(t, err)
+	require.NotNil(t, newEb.value)
+	newMPC, err := new(MembershipProofCommitting).New(wit, acc, newParams, pk, newEb)
 	require.NoError(t, err)
 	testMPC(t, newMPC)
 
