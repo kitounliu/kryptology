@@ -176,3 +176,26 @@ func TestUpdate(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, acc.value.ToAffineCompressed(), curve.PointG1.Generator().ToAffineCompressed())
 }
+
+func TestSetMarshal(t *testing.T) {
+	curve := curves.BLS12381(&curves.PointBls12381G1{})
+
+	element1 := curve.Scalar.Hash([]byte("value1"))
+	element2 := curve.Scalar.Hash([]byte("value2"))
+	element3 := curve.Scalar.Hash([]byte("value3"))
+	element4 := curve.Scalar.Hash([]byte("value4"))
+	element5 := curve.Scalar.Hash([]byte("value5"))
+
+	es := ElementSet{Elements: []Element{element1, element2, element3, element4, element5}}
+	data, err := es.MarshalBinary()
+	require.NoError(t, err)
+
+	ts := new(ElementSet)
+	err = ts.UnmarshalBinary(data)
+	require.NoError(t, err)
+
+	require.Equal(t, len(es.Elements), len(ts.Elements))
+	for i, e := range es.Elements {
+		require.Equal(t, e.Bytes(), ts.Elements[i].Bytes())
+	}
+}

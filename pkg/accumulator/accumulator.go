@@ -26,8 +26,16 @@ type structMarshal struct {
 
 type Element curves.Scalar
 
+type ElementSet struct {
+	Elements []Element
+}
+
 // Coefficient is a point
 type Coefficient curves.Point
+
+type CoefficientSet struct {
+	Coefficients []Coefficient
+}
 
 // Accumulator is a point
 type Accumulator struct {
@@ -168,5 +176,78 @@ func (acc *Accumulator) UnmarshalBinary(data []byte) error {
 		return err
 	}
 	acc.value = value
+	return nil
+}
+
+func (es ElementSet) MarshalBinary() ([]byte, error) {
+	var ts []structMarshal
+	for _, e := range es.Elements {
+		t := structMarshal{
+			Value: e.Bytes(),
+			Curve: e.Point().CurveName(),
+		}
+		ts = append(ts, t)
+	}
+	return bare.Marshal(&ts)
+}
+
+func (es *ElementSet) UnmarshalBinary(data []byte) error {
+	var ts []structMarshal
+	err := bare.Unmarshal(data, &ts)
+	if err != nil {
+		return err
+	}
+
+	var elements []Element
+	for _, t := range ts {
+		curve := curves.GetCurveByName(t.Curve)
+		if curve == nil {
+			return fmt.Errorf("invalid curve")
+		}
+		value, err := curve.NewScalar().SetBytes(t.Value)
+		if err != nil {
+			return err
+		}
+		elements = append(elements, Element(value))
+	}
+
+	es.Elements = elements
+	return nil
+}
+
+func (cs CoefficientSet) MarshalBinary() ([]byte, error) {
+	var ts []structMarshal
+	for _, c := range cs.Coefficients {
+		t := structMarshal{
+			Value: c.ToAffineCompressed(),
+			Curve: c.CurveName(),
+		}
+		ts = append(ts, t)
+	}
+	return bare.Marshal(&ts)
+}
+
+func (cs *CoefficientSet) UnmarshalBinary(data []byte) error {
+	var ts []structMarshal
+	err := bare.Unmarshal(data, &ts)
+	if err != nil {
+		return err
+	}
+
+	var coefficents []Coefficient
+	for _, t := range ts {
+		curve := curves.GetCurveByName(t.Curve)
+		if curve == nil {
+			return fmt.Errorf("invalid curve")
+		}
+
+		value, err := curve.NewIdentityPoint().FromAffineCompressed(t.Value)
+		if err != nil {
+			return err
+		}
+		coefficents = append(coefficents, Coefficient(value))
+	}
+
+	cs.Coefficients = coefficents
 	return nil
 }

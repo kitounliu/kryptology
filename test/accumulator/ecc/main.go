@@ -134,7 +134,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	mpc, err := new(accumulator.MembershipProofCommitting).New(wit, acc, params, pk)
+	mpc, err := new(accumulator.MembershipProofCommitting).New(wit, acc, params, pk, nil)
 	if err != nil {
 		panic(err)
 	}

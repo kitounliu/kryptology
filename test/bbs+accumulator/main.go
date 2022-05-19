@@ -2,6 +2,7 @@ package main
 
 import (
 	crand "crypto/rand"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/coinbase/kryptology/pkg/accumulator"
@@ -17,6 +18,13 @@ func main() {
 	sk, _ := new(accumulator.SecretKey).New(curve, []byte("1234567890"))
 	pk, _ := sk.GetPublicKey(curve)
 
+	// print
+	skBytes, _ := sk.MarshalBinary()
+	pkBytes, _ := pk.MarshalBinary()
+	fmt.Println("Coinbase generates secret key and public key pair...")
+	fmt.Printf("Coinbase publishes public key \n%v\n", hex.EncodeToString(pkBytes))
+	fmt.Printf("Coinbase retains secret key \n%v\n", hex.EncodeToString(skBytes))
+
 	element1 := curve.Scalar.Hash([]byte("3"))
 	element2 := curve.Scalar.Hash([]byte("4"))
 	element3 := curve.Scalar.New(5)
@@ -31,6 +39,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	accBytes, _ := acc.MarshalBinary()
+	fmt.Printf("Accumulator Initiated! Value is %v\n", hex.EncodeToString(accBytes))
 
 	// Initiate a new membership witness for value elements[3]
 	wit, err := new(accumulator.MembershipWitness).New(elements[2], acc, sk)
@@ -38,7 +48,7 @@ func main() {
 		panic(err)
 	}
 
-	// todo: set up bbs+
+	// set up bbs+
 	curve2 := curves.BLS12381(&curves.PointBls12381G2{})
 	pkB, skB, err := bbs.NewKeys(curve2)
 	if err != nil {
@@ -62,9 +72,18 @@ func main() {
 
 	// proofs start
 	// preparing membership proof
-	params, err := new(accumulator.ProofParams).New(curve, pk, []byte("entropy"))
+	params, err := new(accumulator.ProofParams).New(curve, pk, []byte("entropy needed to be included into the proof for verification"))
+	if err != nil {
+		panic(err)
+	}
 	eb, err := new(accumulator.ExternalBlinding).New(curve)
+	if err != nil {
+		panic(err)
+	}
 	mpc, err := new(accumulator.MembershipProofCommitting).New(wit, acc, params, pk, eb)
+	if err != nil {
+		panic(err)
+	}
 	okm := mpc.GetChallengeBytes()
 
 	// preparing bbs+ proof
@@ -105,10 +124,13 @@ func main() {
 
 	// generate the final BBS+ pok proof
 	pokSigB, err := pokB.GenerateProof(challenge)
-
-	// the combined final proof is (challenge, proof, pokSigB)
+	if err != nil {
+		panic(err)
+	}
+	// the combined final proof is (challenge, entropy, proof, pokSigB)
 
 	// verify the proofs
+
 	// verify membership proof
 	finalProof, err := proof.Finalize(acc, params, pk, challenge)
 	if err != nil {
@@ -119,8 +141,6 @@ func main() {
 
 	// verify BBS+ pok proof
 	revealedMsgs := map[int]curves.Scalar{}
-
-	// Manual verify to show how when used in conjunction with other ZKPs
 	transcript = merlin.NewTranscript("TestPokSignatureProofAccumulatorWork")
 	pokSigB.GetChallengeContribution(generatorsB, revealedMsgs, challenge, transcript)
 	transcript.AppendMessage([]byte("nonce"), nonce.Bytes())
@@ -132,11 +152,11 @@ func main() {
 	validSig := pokSigB.VerifySigPok(pkB)
 
 	// compare linked blinding
-	sMess, err := pokSigB.GetLinkedBlindingForMessage(3)
+	sMess, err := pokSigB.GetPublicBlindingForMessage(3)
 	if err != nil {
 		panic(err)
 	}
-	validBlinding := proof.GetLinkedBlinding().Cmp(sMess)
+	validBlinding := proof.GetPublicBlinding().Cmp(sMess)
 
 	if validSig && challenge.Cmp(challenge2) == 0 && validBlinding == 0 {
 		fmt.Println("proof verification succeeds!")

@@ -424,7 +424,7 @@ func (mp *MembershipProof) Finalize(acc *Accumulator, pp *ProofParams, pk *Publi
 }
 
 // GetLinkedBlinding returns sY so it can be compared with external linked value in other ZKP
-func (mp MembershipProof) GetLinkedBlinding() curves.Scalar {
+func (mp MembershipProof) GetPublicBlinding() curves.Scalar {
 	return mp.sY
 }
 
