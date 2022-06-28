@@ -17,7 +17,7 @@ import (
 // dA(y) = prod(y_A,t - y), t = 1...n
 // dD(y) = prod(y_D,t - y), t = 1...n
 func dad(values []Element, y Element) (Element, error) {
-	if values == nil || y == nil {
+	if y == nil {
 		return nil, fmt.Errorf("curve, values or y should not be nil")
 	}
 

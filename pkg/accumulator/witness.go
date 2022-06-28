@@ -355,7 +355,7 @@ func evaluateDelta(y Element, additions []Element, deletions []Element, coeffici
 	//dA(y) =  ∏ 1..n (yA_i - y)
 	a, err := dad(additions, y)
 	if err != nil {
-		return nil, fmt.Errorf("dad fails on additions")
+		return nil, fmt.Errorf("dad fails on additions: %s", err.Error())
 	}
 	// dA(y)/dD(y)
 	a = a.Mul(d)
