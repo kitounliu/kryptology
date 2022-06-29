@@ -117,7 +117,7 @@ func (mw *MembershipWitness) BatchUpdate(additions []Element, deletions []Elemen
 func (mw *MembershipWitness) MultiBatchUpdate(A [][]Element, D [][]Element, C [][]Coefficient) (*MembershipWitness, error) {
 	delta, err := evaluateDeltas(mw.y, A, D, C)
 	if err != nil {
-		return nil, fmt.Errorf("evaluateDeltas fails")
+		return nil, fmt.Errorf("evaluateDeltas fails: %s", err.Error())
 	}
 	mw, err = mw.ApplyDelta(delta)
 	if err != nil {
