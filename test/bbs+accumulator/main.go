@@ -112,11 +112,9 @@ func main() {
 	transcript := merlin.NewTranscript("TestPokSignatureProofAccumulatorWork")
 	pokB.GetChallengeContribution(transcript)
 	transcript.AppendMessage([]byte("nonce"), nonce.Bytes())
-	okmB := transcript.ExtractBytes([]byte("signature proof of knowledge"), 64)
+	transcript.AppendMessage([]byte("membership proof"), okm)
+	okmC := transcript.ExtractBytes([]byte("signature proof of knowledge"), 64)
 
-	// todo: improve the challenge generation
-	// create combined challenge
-	okmC := append(okm, okmB...)
 	challenge := curve.Scalar.Hash(okmC)
 
 	// generate the final membership proof
@@ -144,9 +142,9 @@ func main() {
 	transcript = merlin.NewTranscript("TestPokSignatureProofAccumulatorWork")
 	pokSigB.GetChallengeContribution(generatorsB, revealedMsgs, challenge, transcript)
 	transcript.AppendMessage([]byte("nonce"), nonce.Bytes())
-	okmBV := transcript.ExtractBytes([]byte("signature proof of knowledge"), 64)
+	transcript.AppendMessage([]byte("membership proof"), okmV)
+	okmCV := transcript.ExtractBytes([]byte("signature proof of knowledge"), 64)
 
-	okmCV := append(okmV, okmBV...)
 	challenge2 := curve.Scalar.Hash(okmCV)
 
 	validSig := pokSigB.VerifySigPok(pkB)
@@ -163,5 +161,4 @@ func main() {
 	} else {
 		fmt.Println("proof verification fails!")
 	}
-
 }
