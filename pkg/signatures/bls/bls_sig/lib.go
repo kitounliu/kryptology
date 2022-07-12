@@ -152,6 +152,10 @@ func (sks *SecretKeyShare) UnmarshalBinary(data []byte) error {
 	}
 	l := len(data)
 	sks.identifier = data[l-1]
+<<<<<<< HEAD
+=======
+	sks.value = make([]byte, SecretKeySize)
+>>>>>>> master
 	copy(sks.value, data[:l])
 	return nil
 }
